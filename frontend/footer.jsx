@@ -83,7 +83,7 @@ export default function Footer({ onSecretClick }) {
             <EmailIcon />
           </a>
           <a
-            href="https://wa.me/256788544520"
+            href="https://wa.me/256778544520"
             target="_blank"
             rel="noreferrer"
             className={`${styles.iconLink} ${styles.whatsapp}`}

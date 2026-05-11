@@ -77,7 +77,7 @@ export default function Hero() {
     a.click()
   }
 
-  const WHATSAPP_NUMBER = '256788544520'
+  const WHATSAPP_NUMBER = '256778544520'
   const WHATSAPP_MSG = encodeURIComponent("Hi Suzan! I'd love to connect with you.")
 
   return (
