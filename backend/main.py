@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 import smtplib
@@ -7,11 +8,30 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import logging
+import shutil
+import secrets
+from pathlib import Path
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ── Upload storage ─────────────────────────────────────────────────────────────
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/tmp/portfolio_uploads"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+PHOTO_PATH = UPLOAD_DIR / "profile_photo"   # extension stored separately
+CV_PATH    = UPLOAD_DIR / "cv.pdf"
+META_PATH  = UPLOAD_DIR / "meta.json"       # stores photo extension & cv filename
+
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")  # set a strong secret in .env
+
+def require_admin(authorization: str = ""):
+    """Simple bearer-token auth for admin-only upload endpoints."""
+    token = authorization.replace("Bearer ", "").strip()
+    if not ADMIN_TOKEN or not secrets.compare_digest(token, ADMIN_TOKEN):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 app = FastAPI(title="Kemigisa Suzan — Portfolio API", version="1.0.0")
 
@@ -147,3 +167,88 @@ async def contact(form: ContactForm):
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")
+
+# ── Photo endpoints ────────────────────────────────────────────────────────────
+
+@app.get("/photo")
+def get_photo():
+    """Return the profile photo. 404 if not uploaded yet."""
+    import json
+    try:
+        meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
+    except Exception:
+        meta = {}
+    ext = meta.get("photo_ext", "")
+    path = UPLOAD_DIR / f"profile_photo{ext}"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No photo uploaded yet")
+    return FileResponse(path, media_type=f"image/{ext.lstrip('.') or 'jpeg'}", headers={
+        "Cache-Control": "public, max-age=3600"
+    })
+
+@app.post("/photo")
+async def upload_photo(
+    file: UploadFile = File(...),
+    authorization: str = ""
+):
+    """Admin only — upload a new profile photo."""
+    require_admin(authorization)
+    allowed = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail="Only jpg, png, webp images are accepted")
+    dest = UPLOAD_DIR / f"profile_photo{ext}"
+    # Remove old photo files with any extension
+    for old in UPLOAD_DIR.glob("profile_photo.*"):
+        old.unlink(missing_ok=True)
+    with dest.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    # Update meta
+    import json
+    meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
+    meta["photo_ext"] = ext
+    META_PATH.write_text(json.dumps(meta))
+    logger.info(f"Profile photo uploaded: {dest.name}")
+    return {"success": True, "message": "Photo uploaded"}
+
+# ── CV endpoints ───────────────────────────────────────────────────────────────
+
+@app.get("/cv")
+def get_cv():
+    """Return the CV PDF for download. 404 if not uploaded yet."""
+    import json
+    try:
+        meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
+    except Exception:
+        meta = {}
+    if not CV_PATH.exists():
+        raise HTTPException(status_code=404, detail="No CV uploaded yet")
+    filename = meta.get("cv_name", "Kemigisa_Suzan_CV.pdf")
+    return FileResponse(CV_PATH, media_type="application/pdf",
+                        headers={
+                            "Content-Disposition": f'attachment; filename="{filename}"',
+                            "Cache-Control": "public, max-age=3600"
+                        })
+
+@app.get("/cv/exists")
+def cv_exists():
+    """Returns whether a CV has been uploaded."""
+    return {"exists": CV_PATH.exists()}
+
+@app.post("/cv")
+async def upload_cv(
+    file: UploadFile = File(...),
+    authorization: str = ""
+):
+    """Admin only — upload a new CV PDF."""
+    require_admin(authorization)
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    with CV_PATH.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    import json
+    meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
+    meta["cv_name"] = file.filename
+    META_PATH.write_text(json.dumps(meta))
+    logger.info(f"CV uploaded: {file.filename}")
+    return {"success": True, "message": "CV uploaded"}

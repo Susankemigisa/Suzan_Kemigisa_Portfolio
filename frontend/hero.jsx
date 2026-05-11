@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import styles from './hero.module.css'
 import { useAdmin } from './app.jsx'
 
-const PHOTO_KEY   = 'ks-profile-photo'
-const CV_KEY      = 'ks-cv-pdf'
-const CV_NAME_KEY = 'ks-cv-name'
+// Backend base URL — Vercel routes /_/backend/* to the FastAPI service
+const API = '/_/backend'
 
 const stats = [
   { val: '10+', label: 'Projects shipped', sub: 'Production & portfolio' },
@@ -20,61 +19,74 @@ function PulseDot({ color = '#4ADE80' }) {
 }
 
 export default function Hero() {
-  // Load saved photo from localStorage on first render
-  const [photo, setPhoto] = useState(() => {
-    try { return localStorage.getItem(PHOTO_KEY) || null } catch { return null }
-  })
-  const fileRef = useRef()
   const isAdmin = useAdmin()
 
-  const handlePhoto = (e) => {
+  // ── Photo state ────────────────────────────────────────────────────────────
+  // Use a cache-busting timestamp so re-uploads show immediately
+  const [photoBust, setPhotoBust] = useState(Date.now())
+  const [photoExists, setPhotoExists] = useState(false)
+  const fileRef = useRef()
+
+  useEffect(() => {
+    // Check if photo exists by trying to fetch it
+    fetch(`${API}/photo`, { method: 'HEAD' })
+      .then(r => setPhotoExists(r.ok))
+      .catch(() => setPhotoExists(false))
+  }, [photoBust])
+
+  const handlePhoto = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const base64 = ev.target.result          // "data:image/jpeg;base64,..."
-      setPhoto(base64)
-      try { localStorage.setItem(PHOTO_KEY, base64) } catch {
-        // localStorage full — still show in memory this session
-        console.warn('localStorage full; photo will not persist after refresh.')
-      }
+    const token = import.meta.env.VITE_ADMIN_TOKEN || ''
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch(`${API}/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setPhotoBust(Date.now()) // triggers re-render with new image
+    } catch (err) {
+      alert('Photo upload failed: ' + err.message)
     }
-    reader.readAsDataURL(file)
   }
 
-  // CV — load saved base64 from localStorage
-  const [cvData, setCvData] = useState(() => {
-    try { return localStorage.getItem(CV_KEY) || null } catch { return null }
-  })
-  const [cvName, setCvName] = useState(() => {
-    try { return localStorage.getItem(CV_NAME_KEY) || 'Kemigisa_Suzan_CV.pdf' } catch { return 'Kemigisa_Suzan_CV.pdf' }
-  })
+  // ── CV state ───────────────────────────────────────────────────────────────
+  const [cvExists, setCvExists] = useState(false)
   const cvRef = useRef()
 
-  const handleCvUpload = (e) => {
+  useEffect(() => {
+    fetch(`${API}/cv/exists`)
+      .then(r => r.json())
+      .then(d => setCvExists(d.exists))
+      .catch(() => setCvExists(false))
+  }, [])
+
+  const handleCvUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const base64 = ev.target.result
-      setCvData(base64)
-      setCvName(file.name)
-      try {
-        localStorage.setItem(CV_KEY, base64)
-        localStorage.setItem(CV_NAME_KEY, file.name)
-      } catch {
-        console.warn('localStorage full; CV will not persist after refresh.')
-      }
+    const token = import.meta.env.VITE_ADMIN_TOKEN || ''
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch(`${API}/cv`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setCvExists(true)
+      alert('CV uploaded successfully!')
+    } catch (err) {
+      alert('CV upload failed: ' + err.message)
     }
-    reader.readAsDataURL(file)
   }
 
   const handleCvDownload = () => {
-    if (!cvData) return
-    const a = document.createElement('a')
-    a.href = cvData
-    a.download = cvName
-    a.click()
+    // Open the backend URL directly — browser will prompt download
+    window.open(`${API}/cv`, '_blank')
   }
 
   const WHATSAPP_NUMBER = '256778544520'
@@ -123,7 +135,7 @@ export default function Hero() {
           {isAdmin ? (
             <>
               <button onClick={() => cvRef.current?.click()} className="btn-ghost">
-                {cvData ? '📄 Replace CV' : '📄 Upload CV'}
+                {cvExists ? '📄 Replace CV' : '📄 Upload CV'}
               </button>
               <input
                 type="file"
@@ -133,7 +145,7 @@ export default function Hero() {
                 onChange={handleCvUpload}
               />
             </>
-          ) : cvData ? (
+          ) : cvExists ? (
             <button onClick={handleCvDownload} className="btn-ghost">
               📄 Download CV
             </button>
@@ -152,8 +164,8 @@ export default function Hero() {
             title={isAdmin ? 'Click to upload your photo' : undefined}
             style={{ cursor: isAdmin ? 'pointer' : 'default' }}
           >
-            {photo ? (
-              <img src={photo} alt="Kemigisa Suzan" className={styles.photoImg} />
+            {photoExists ? (
+              <img src={`${API}/photo?v=${photoBust}`} alt="Kemigisa Suzan" className={styles.photoImg} />
             ) : (
               <div className={styles.photoPlaceholder}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

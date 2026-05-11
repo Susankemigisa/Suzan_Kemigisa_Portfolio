@@ -112,8 +112,8 @@ function useReveal() {
   }, [])
 }
 
-// ─── Admin password (change this to whatever you want) ─────────────────────────
-const ADMIN_PASSWORD = 'suzan2026'
+// ─── Admin password — set VITE_ADMIN_PASSWORD in your Vercel env vars ──────────
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'suzan2026'
 
 // ─── Custom admin login modal ──────────────────────────────────────────────────
 const modalStyles = `
@@ -155,16 +155,26 @@ const modalStyles = `
     text-transform: uppercase; color: var(--muted);
     display: block; margin-bottom: 6px;
   }
+  .admin-modal-input-wrap {
+    position: relative; margin-bottom: .5rem;
+  }
   .admin-modal-input {
     width: 100%; background: var(--s3);
     border: 1px solid var(--border2);
     color: var(--text); font-family: 'DM Sans', sans-serif;
-    font-size: 14px; padding: 11px 14px;
-    border-radius: 8px; outline: none;
-    transition: border-color .2s; margin-bottom: .5rem;
+    font-size: 14px; padding: 11px 42px 11px 14px;
+    border-radius: 8px; outline: none; box-sizing: border-box;
+    transition: border-color .2s;
   }
   .admin-modal-input:focus { border-color: var(--gold); }
   .admin-modal-input.shake { animation: shake .35s ease; }
+  .admin-modal-eye {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); padding: 4px; display: flex;
+    transition: color .2s;
+  }
+  .admin-modal-eye:hover { color: var(--text); }
   .admin-modal-error {
     font-size: 12px; color: var(--rose);
     margin-bottom: 1rem; min-height: 16px;
@@ -210,10 +220,25 @@ const modalStyles = `
   @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
 `
 
+function EyeIcon({ open }) {
+  return open ? (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  )
+}
+
 function AdminLoginModal({ onSuccess, onClose }) {
-  const [value, setValue] = useState('')
-  const [error, setError]  = useState('')
-  const [shake, setShake]  = useState(false)
+  const [value, setValue]   = useState('')
+  const [error, setError]   = useState('')
+  const [shake, setShake]   = useState(false)
+  const [show,  setShow]    = useState(false)
   const inputRef = useRef()
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -243,17 +268,28 @@ function AdminLoginModal({ onSuccess, onClose }) {
         <div className="admin-modal-title">Admin Access</div>
         <div className="admin-modal-sub">Enter your password to unlock portfolio management.</div>
         <label className="admin-modal-label" htmlFor="admin-pwd">Password</label>
-        <input
-          id="admin-pwd"
-          ref={inputRef}
-          type="password"
-          className={`admin-modal-input${shake ? ' shake' : ''}`}
-          placeholder="Enter password"
-          value={value}
-          onChange={e => { setValue(e.target.value); setError('') }}
-          onKeyDown={onKey}
-          autoComplete="current-password"
-        />
+        <div className="admin-modal-input-wrap">
+          <input
+            id="admin-pwd"
+            ref={inputRef}
+            type={show ? 'text' : 'password'}
+            className={`admin-modal-input${shake ? ' shake' : ''}`}
+            placeholder="Enter password"
+            value={value}
+            onChange={e => { setValue(e.target.value); setError('') }}
+            onKeyDown={onKey}
+            autoComplete="current-password"
+          />
+          <button
+            className="admin-modal-eye"
+            onClick={() => setShow(v => !v)}
+            type="button"
+            tabIndex={-1}
+            aria-label={show ? 'Hide password' : 'Show password'}
+          >
+            <EyeIcon open={show} />
+          </button>
+        </div>
         <div className="admin-modal-error">{error}</div>
         <div className="admin-modal-actions">
           <button className="admin-modal-cancel" onClick={onClose}>Cancel</button>
