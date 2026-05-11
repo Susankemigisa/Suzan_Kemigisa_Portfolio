@@ -1,0 +1,149 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr
+from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+import logging
+
+load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Kemigisa Suzan — Portfolio API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Models ────────────────────────────────────────────────────────────────────
+
+class ContactForm(BaseModel):
+    name: str
+    email: EmailStr
+    subject: str
+    message: str
+
+class ContactResponse(BaseModel):
+    success: bool
+    message: str
+
+# ── Email helper ──────────────────────────────────────────────────────────────
+
+def send_email(form: ContactForm) -> None:
+    smtp_host     = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port     = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user     = os.getenv("SMTP_USER")       # your Gmail address
+    smtp_password = os.getenv("SMTP_PASSWORD")   # Gmail App Password
+    to_email      = os.getenv("TO_EMAIL", smtp_user)  # where to receive messages
+
+    if not smtp_user or not smtp_password:
+        raise RuntimeError("SMTP credentials not configured. Check your .env file.")
+
+    # ── Email to YOU (notification) ───────────────────────────────────────────
+    notify_msg = MIMEMultipart("alternative")
+    notify_msg["Subject"] = f"[Portfolio] {form.subject}"
+    notify_msg["From"]    = smtp_user
+    notify_msg["To"]      = to_email
+
+    notify_html = f"""
+    <html><body style="font-family:sans-serif;max-width:560px;margin:auto;padding:24px;background:#f9f9f9">
+      <div style="background:#06060A;border-radius:12px;padding:32px;color:#EEE8FF">
+        <h2 style="color:#F0C060;margin-bottom:4px">New Portfolio Message</h2>
+        <p style="color:#7A7490;font-size:13px;margin-top:0">via kemigisasuzan.dev</p>
+        <hr style="border-color:#1A1A2A;margin:20px 0"/>
+        <table style="width:100%;font-size:14px;color:#A89FC0">
+          <tr><td style="padding:6px 0;color:#7A7490;width:80px">From</td><td style="color:#EEE8FF">{form.name}</td></tr>
+          <tr><td style="padding:6px 0;color:#7A7490">Email</td><td><a href="mailto:{form.email}" style="color:#9D7FEA">{form.email}</a></td></tr>
+          <tr><td style="padding:6px 0;color:#7A7490">Subject</td><td style="color:#EEE8FF">{form.subject}</td></tr>
+        </table>
+        <hr style="border-color:#1A1A2A;margin:20px 0"/>
+        <h4 style="color:#F0C060;margin-bottom:10px">Message</h4>
+        <p style="color:#A89FC0;line-height:1.8;white-space:pre-wrap">{form.message}</p>
+      </div>
+    </body></html>
+    """
+    notify_msg.attach(MIMEText(notify_html, "html"))
+
+    # ── Auto-reply to SENDER ──────────────────────────────────────────────────
+    reply_msg = MIMEMultipart("alternative")
+    reply_msg["Subject"] = f"Re: {form.subject} — Got your message!"
+    reply_msg["From"]    = f"Kemigisa Suzan <{smtp_user}>"
+    reply_msg["To"]      = form.email
+
+    reply_html = f"""
+    <html><body style="font-family:sans-serif;max-width:560px;margin:auto;padding:24px;background:#f9f9f9">
+      <div style="background:#06060A;border-radius:12px;padding:32px;color:#EEE8FF">
+        <h2 style="color:#F0C060;margin-bottom:4px">Hey {form.name}! 👋</h2>
+        <p style="color:#A89FC0;line-height:1.8">
+          Thanks for reaching out — I've received your message and will get back to you as soon as possible, typically within 12–24 hours.
+        </p>
+        <div style="background:#0D0D14;border:1px solid #1A1A2A;border-radius:8px;padding:16px;margin:20px 0">
+          <p style="color:#7A7490;font-size:12px;margin:0 0 6px">Your message:</p>
+          <p style="color:#A89FC0;font-size:13px;line-height:1.7;white-space:pre-wrap;margin:0">{form.message}</p>
+        </div>
+        <p style="color:#A89FC0;line-height:1.8">
+          While you wait, feel free to check out my work on 
+          <a href="https://github.com/Susankemigisa" style="color:#9D7FEA">GitHub</a> or connect on 
+          <a href="https://www.linkedin.com/in/suzan-kemigisa/" style="color:#9D7FEA">LinkedIn</a>.
+        </p>
+        <hr style="border-color:#1A1A2A;margin:24px 0"/>
+        <p style="color:#7A7490;font-size:12px;margin:0">
+          Kemigisa Suzan · Software & AI Engineer · Kampala, Uganda
+        </p>
+      </div>
+    </body></html>
+    """
+    reply_msg.attach(MIMEText(reply_html, "html"))
+
+    # ── Send both ─────────────────────────────────────────────────────────────
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(notify_msg)
+        server.send_message(reply_msg)
+        logger.info(f"Emails sent — from: {form.email}, subject: {form.subject}")
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.get("/")
+def root():
+    return {"status": "ok", "api": "Kemigisa Suzan Portfolio API"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+@app.post("/contact", response_model=ContactResponse)
+async def contact(form: ContactForm):
+    # Basic validation
+    if len(form.name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Name must be at least 2 characters.")
+    if len(form.message.strip()) < 10:
+        raise HTTPException(status_code=422, detail="Message must be at least 10 characters.")
+    if len(form.subject.strip()) < 3:
+        raise HTTPException(status_code=422, detail="Subject must be at least 3 characters.")
+
+    try:
+        send_email(form)
+        return ContactResponse(
+            success=True,
+            message="Message sent! I'll get back to you within 24–48 hours."
+        )
+    except RuntimeError as e:
+        logger.error(f"Config error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    except smtplib.SMTPAuthenticationError:
+        logger.error("SMTP authentication failed")
+        raise HTTPException(status_code=500, detail="Email authentication failed. Check SMTP credentials.")
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")

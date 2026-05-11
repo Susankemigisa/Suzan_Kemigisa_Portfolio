@@ -1,0 +1,92 @@
+.footer {
+  padding: 0 3.5rem 3rem;
+}
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 2rem;
+}
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Brand — looks like text, acts as hidden button */
+.brandWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brand {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.1rem;
+  color: var(--text);
+  cursor: default; /* no pointer — visitors won't suspect it's clickable */
+  text-align: left;
+  user-select: none;
+}
+
+/* Alive / availability indicator */
+.alive {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.aliveDot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+  animation: alivePulse 2.5s ease-out infinite;
+}
+@keyframes alivePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
+  70%  { box-shadow: 0 0 0 7px rgba(74,222,128,0); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
+}
+
+.copy {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Icon-only social links */
+.icons {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.iconLink {
+  width: 38px; height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: color 0.2s, border-color 0.2s, transform 0.15s, background 0.2s;
+  text-decoration: none;
+}
+.iconLink:hover {
+  transform: translateY(-3px);
+}
+
+/* Per-platform hover colours */
+.github:hover   { color: var(--text);    border-color: var(--purple); background: rgba(157,127,234,0.08); }
+.linkedin:hover { color: #0A66C2;        border-color: rgba(10,102,194,0.5); background: rgba(10,102,194,0.07); }
+.email:hover    { color: var(--teal);    border-color: rgba(45,212,191,0.4); background: rgba(45,212,191,0.07); }
+.whatsapp:hover { color: #25D366;        border-color: rgba(37,211,102,0.4); background: rgba(37,211,102,0.07); }
+
+@media (max-width: 600px) {
+  .footer { padding: 0 1.5rem 2.5rem; }
+  .inner  { flex-direction: column; align-items: flex-start; }
+}
