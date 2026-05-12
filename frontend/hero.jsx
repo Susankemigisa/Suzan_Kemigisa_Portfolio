@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
 import styles from './hero.module.css'
-import { useAdmin } from './app.jsx'
 
-// Backend base URL — Vercel routes /_/backend/* to the FastAPI service
-const API = '/_/backend'
+// Static assets — place your files in the frontend/public folder:
+//   public/photo.jpg  (or .png / .webp)
+//   public/cv.pdf
+const PHOTO_URL = '/Kemigisa_Suzan.jpg'   // change extension if needed
+const CV_URL    = '/CV_Kemigisa_Suzan.pdf'
 
 const stats = [
   { val: '10+', label: 'Projects shipped', sub: 'Production & portfolio' },
@@ -19,76 +20,6 @@ function PulseDot({ color = '#4ADE80' }) {
 }
 
 export default function Hero() {
-  const isAdmin = useAdmin()
-
-  // ── Photo state ────────────────────────────────────────────────────────────
-  // Use a cache-busting timestamp so re-uploads show immediately
-  const [photoBust, setPhotoBust] = useState(Date.now())
-  const [photoExists, setPhotoExists] = useState(false)
-  const fileRef = useRef()
-
-  useEffect(() => {
-    // Check if photo exists by trying to fetch it
-    fetch(`${API}/photo`, { method: 'HEAD' })
-      .then(r => setPhotoExists(r.ok))
-      .catch(() => setPhotoExists(false))
-  }, [photoBust])
-
-  const handlePhoto = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const token = import.meta.env.VITE_ADMIN_TOKEN || ''
-    const fd = new FormData()
-    fd.append('file', file)
-    try {
-      const res = await fetch(`${API}/photo`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      })
-      if (!res.ok) throw new Error(await res.text())
-      setPhotoBust(Date.now()) // triggers re-render with new image
-    } catch (err) {
-      alert('Photo upload failed: ' + err.message)
-    }
-  }
-
-  // ── CV state ───────────────────────────────────────────────────────────────
-  const [cvExists, setCvExists] = useState(false)
-  const cvRef = useRef()
-
-  useEffect(() => {
-    fetch(`${API}/cv/exists`)
-      .then(r => r.json())
-      .then(d => setCvExists(d.exists))
-      .catch(() => setCvExists(false))
-  }, [])
-
-  const handleCvUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const token = import.meta.env.VITE_ADMIN_TOKEN || ''
-    const fd = new FormData()
-    fd.append('file', file)
-    try {
-      const res = await fetch(`${API}/cv`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      })
-      if (!res.ok) throw new Error(await res.text())
-      setCvExists(true)
-      alert('CV uploaded successfully!')
-    } catch (err) {
-      alert('CV upload failed: ' + err.message)
-    }
-  }
-
-  const handleCvDownload = () => {
-    // Open the backend URL directly — browser will prompt download
-    window.open(`${API}/cv`, '_blank')
-  }
-
   const WHATSAPP_NUMBER = '256778544520'
   const WHATSAPP_MSG = encodeURIComponent("Hi Suzan! I'd love to connect with you.")
 
@@ -131,25 +62,9 @@ export default function Hero() {
             WhatsApp Me
             <span className={styles.waBlink} />
           </a>
-          {/* CV button — admin sees upload, visitors see download (only if CV exists) */}
-          {isAdmin ? (
-            <>
-              <button onClick={() => cvRef.current?.click()} className="btn-ghost">
-                {cvExists ? '📄 Replace CV' : '📄 Upload CV'}
-              </button>
-              <input
-                type="file"
-                accept="application/pdf"
-                ref={cvRef}
-                style={{ display: 'none' }}
-                onChange={handleCvUpload}
-              />
-            </>
-          ) : cvExists ? (
-            <button onClick={handleCvDownload} className="btn-ghost">
-              📄 Download CV
-            </button>
-          ) : null}
+          <a href={CV_URL} download="CV_Kemigisa_Suzan.pdf" className="btn-ghost">
+            📄 Download CV
+          </a>
         </div>
       </div>
 
@@ -158,43 +73,9 @@ export default function Hero() {
 
         {/* Photo card */}
         <div className={styles.photoCard}>
-          <div
-            className={styles.photoRing}
-            onClick={() => isAdmin && fileRef.current?.click()}
-            title={isAdmin ? 'Click to upload your photo' : undefined}
-            style={{ cursor: isAdmin ? 'pointer' : 'default' }}
-          >
-            {photoExists ? (
-              <img src={`${API}/photo?v=${photoBust}`} alt="Kemigisa Suzan" className={styles.photoImg} />
-            ) : (
-              <div className={styles.photoPlaceholder}>
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-                {isAdmin && <span>Upload Photo</span>}
-              </div>
-            )}
-            {/* Overlay only visible to admin */}
-            {isAdmin && (
-              <div className={styles.photoOverlay}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-              </div>
-            )}
+          <div className={styles.photoRing}>
+            <img src={PHOTO_URL} alt="Kemigisa Suzan" className={styles.photoImg} />
           </div>
-          {isAdmin && (
-            <input
-              type="file"
-              accept="image/*"
-              ref={fileRef}
-              style={{ display: 'none' }}
-              onChange={handlePhoto}
-            />
-          )}
           <div className={styles.photoMeta}>
             <div className={styles.photoName}>Kemigisa Suzan</div>
             <div className={styles.photoTitle}>
