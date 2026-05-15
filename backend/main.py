@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
@@ -11,6 +11,7 @@ import logging
 import shutil
 import secrets
 from pathlib import Path
+from typing import Optional
 
 load_dotenv()
 
@@ -27,9 +28,41 @@ META_PATH  = UPLOAD_DIR / "meta.json"       # stores photo extension & cv filena
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")  # set a strong secret in .env
 
-def require_admin(authorization: str = ""):
+# ── Seed from env vars on cold start (Vercel-safe persistence) ────────────────
+# If PHOTO_BASE64 / CV_BASE64 are set in Vercel env vars, write them to disk
+# so the GET endpoints can serve them even after a cold start.
+import base64, json as _json
+
+def _seed_from_env():
+    photo_b64 = os.getenv("PHOTO_BASE64", "")
+    photo_ext = os.getenv("PHOTO_EXT", ".jpg")
+    cv_b64    = os.getenv("CV_BASE64", "")
+    cv_name   = os.getenv("CV_NAME", "Kemigisa_Suzan_CV.pdf")
+
+    meta = {}
+    if META_PATH.exists():
+        try: meta = _json.loads(META_PATH.read_text())
+        except Exception: pass
+
+    if photo_b64:
+        dest = UPLOAD_DIR / f"profile_photo{photo_ext}"
+        if not dest.exists():   # don't overwrite a freshly uploaded one
+            dest.write_bytes(base64.b64decode(photo_b64))
+            meta["photo_ext"] = photo_ext
+
+    if cv_b64:
+        if not CV_PATH.exists():
+            CV_PATH.write_bytes(base64.b64decode(cv_b64))
+            meta["cv_name"] = cv_name
+
+    if meta:
+        META_PATH.write_text(_json.dumps(meta))
+
+_seed_from_env()
+
+def require_admin(authorization: Optional[str]):
     """Simple bearer-token auth for admin-only upload endpoints."""
-    token = authorization.replace("Bearer ", "").strip()
+    token = (authorization or "").replace("Bearer ", "").strip()
     if not ADMIN_TOKEN or not secrets.compare_digest(token, ADMIN_TOKEN):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -201,7 +234,7 @@ def get_photo():
 @app.post("/photo")
 async def upload_photo(
     file: UploadFile = File(...),
-    authorization: str = ""
+    authorization: Optional[str] = Header(default=None),
 ):
     """Admin only — upload a new profile photo."""
     require_admin(authorization)
@@ -220,8 +253,11 @@ async def upload_photo(
     meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
     meta["photo_ext"] = ext
     META_PATH.write_text(json.dumps(meta))
-    logger.info(f"Profile photo uploaded: {dest.name}")
-    return {"success": True, "message": "Photo uploaded"}
+    # Log base64 so you can copy it to PHOTO_BASE64 env var in Vercel
+    b64 = base64.b64encode(dest.read_bytes()).decode()
+    logger.info(f"PHOTO_BASE64 (copy to Vercel env vars):\n{b64[:80]}...")
+    logger.info(f"PHOTO_EXT={ext}")
+    return {"success": True, "message": "Photo uploaded", "photo_ext": ext, "photo_b64_preview": b64[:40] + "..."}
 
 # ── CV endpoints ───────────────────────────────────────────────────────────────
 
@@ -250,7 +286,7 @@ def cv_exists():
 @app.post("/cv")
 async def upload_cv(
     file: UploadFile = File(...),
-    authorization: str = ""
+    authorization: Optional[str] = Header(default=None),
 ):
     """Admin only — upload a new CV PDF."""
     require_admin(authorization)
@@ -264,3 +300,27 @@ async def upload_cv(
     META_PATH.write_text(json.dumps(meta))
     logger.info(f"CV uploaded: {file.filename}")
     return {"success": True, "message": "CV uploaded"}
+
+# ── Admin export — get base64 values to paste into Vercel env vars ────────────
+
+@app.get("/admin/export")
+def admin_export(authorization: Optional[str] = Header(default=None)):
+    """Returns base64-encoded photo and CV to paste into Vercel env vars."""
+    require_admin(authorization)
+    import json
+    meta = {}
+    try: meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
+    except Exception: pass
+
+    result = {}
+    ext = meta.get("photo_ext", "")
+    photo_path = UPLOAD_DIR / f"profile_photo{ext}"
+    if photo_path.exists():
+        result["PHOTO_BASE64"] = base64.b64encode(photo_path.read_bytes()).decode()
+        result["PHOTO_EXT"] = ext
+
+    if CV_PATH.exists():
+        result["CV_BASE64"] = base64.b64encode(CV_PATH.read_bytes()).decode()
+        result["CV_NAME"] = meta.get("cv_name", "Kemigisa_Suzan_CV.pdf")
+
+    return result
