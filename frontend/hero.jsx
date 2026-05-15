@@ -28,9 +28,10 @@ export default function Hero() {
   const fileRef = useRef()
 
   useEffect(() => {
-    // Check if photo exists by trying to fetch it
-    fetch(`${API}/photo`, { method: 'HEAD' })
-      .then(r => setPhotoExists(r.ok))
+    // Use GET with a small range check instead of HEAD (FastAPI doesn't auto-handle HEAD)
+    fetch(`${API}/photo/exists`)
+      .then(r => r.json())
+      .then(d => setPhotoExists(d.exists))
       .catch(() => setPhotoExists(false))
   }, [photoBust])
 

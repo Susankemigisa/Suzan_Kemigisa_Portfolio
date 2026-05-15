@@ -170,6 +170,18 @@ async def contact(form: ContactForm):
 
 # ── Photo endpoints ────────────────────────────────────────────────────────────
 
+@app.get("/photo/exists")
+def photo_exists():
+    """Returns whether a profile photo has been uploaded."""
+    import json
+    try:
+        meta = json.loads(META_PATH.read_text()) if META_PATH.exists() else {}
+    except Exception:
+        meta = {}
+    ext = meta.get("photo_ext", "")
+    path = UPLOAD_DIR / f"profile_photo{ext}"
+    return {"exists": path.exists()}
+
 @app.get("/photo")
 def get_photo():
     """Return the profile photo. 404 if not uploaded yet."""
