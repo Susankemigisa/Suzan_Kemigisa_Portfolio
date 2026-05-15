@@ -113,7 +113,7 @@ function useReveal() {
 }
 
 // ─── Admin password — set VITE_ADMIN_PASSWORD in your Vercel env vars ──────────
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'suzan2026'
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
 
 // ─── Custom admin login modal ──────────────────────────────────────────────────
 const modalStyles = `
