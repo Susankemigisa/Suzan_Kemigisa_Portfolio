@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import styles from './hero.module.css'
 import { useAdmin } from './app.jsx'
 
-// Backend base URL — Vercel routes /_/backend/* to the FastAPI service
-const API = '/_/backend'
+<img src="/Kemigisa_Suzan.jpg" alt="Kemigisa Suzan" />
+// CV button:
+window.open('/CV_Kemigisa_Suzan.pdf', '_blank')
 
 const stats = [
   { val: '10+', label: 'Projects shipped', sub: 'Production & portfolio' },
